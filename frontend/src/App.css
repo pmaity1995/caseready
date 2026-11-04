@@ -645,5 +645,83 @@ button:disabled {
     -webkit-print-color-adjust: exact;
   }
 }
+/* ===== CaseReady Form Layout Fix ===== */
 
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.form-grid > label,
+.panel > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #24334d;
+}
+
+.panel > label {
+  margin-bottom: 24px;
+}
+
+.form-grid input,
+.form-grid select,
+.panel > label > textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dce3ee;
+  border-radius: 10px;
+  background: #f8fafd;
+  color: #1d2b45;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 12px 14px;
+}
+
+.form-grid input,
+.form-grid select {
+  height: 46px;
+}
+
+.form-grid select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.form-grid small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #71809a;
+}
+
+.panel > label > textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.form-grid input:focus,
+.form-grid select:focus,
+.panel > label > textarea:focus {
+  outline: 2px solid #3676ed;
+  outline-offset: 1px;
+  border-color: #3676ed;
+}
+
+@media (max-width: 800px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
 

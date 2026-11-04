@@ -334,12 +334,22 @@ function App() {
     petitions.respondent.evidence
   ].join('\n')
 
-  const canAnalyze =
-    caseData.title.trim().length >= 3 &&
-    caseData.jurisdiction === 'California, USA' &&
-    caseData.facts.trim().length >= 20 &&
-    petitions.petitioner.petition.trim().length >= 20 &&
-    petitions.respondent.petition.trim().length >= 20
+  const supportedJurisdiction = caseData.jurisdiction === 'California, USA'
+  const validationIssues = [
+    ...(!supportedJurisdiction ? ['Only California, USA is supported in this demo.'] : []),
+    ...(caseData.title.trim().length < 3 || caseData.title.trim().length > 200 ? ['Case title must be 3–200 characters.'] : []),
+    ...(caseData.facts.trim().length < 20 || caseData.facts.trim().length > 30000 ? ['Case facts must be 20–30,000 characters.'] : []),
+    ...(['petitioner', 'respondent'] as const).flatMap(party => {
+      const p = petitions[party]
+      return [
+        ...(p.petition.trim().length < 20 || p.petition.trim().length > 30000 ? [`${party} petition must be 20–30,000 characters.`] : []),
+        ...(p.evidence.trim().length > 30000 ? [`${party} evidence must be at most 30,000 characters.`] : [])
+      ]
+    }),
+    ...(caseData.evidence.trim().length + caseData.facts.trim().length + 30 > 30000 ? ['Combined case facts and additional evidence exceed the 30,000-character API limit.'] : [])
+  ]
+
+  const canAnalyze = validationIssues.length === 0
 
   const invalidateResults = () => {
     setAnalysis('')
@@ -374,7 +384,7 @@ function App() {
   }
 
   const runMuseAnalysis = async () => {
-    if (!canAnalyze) return
+    if (!canAnalyze || loading || judicialLoading) return
 
     setLoading(true)
     setError('')
@@ -419,7 +429,7 @@ function App() {
   }
 
   const runJudicialIntelligence = async () => {
-    if (!canAnalyze || judicialLoading) return
+    if (!canAnalyze || judicialLoading || loading) return
 
     setJudicialLoading(true)
     setJudicialError('')
@@ -478,6 +488,13 @@ function App() {
   }
 
   const runLegalResearch = async () => {
+    if (!supportedJurisdiction || researchLoading || precedentLoading) return
+  
+    if (researchQuery.trim().length < 5) {
+      setResearchError('Enter at least 5 characters to search.')
+      return
+    }
+  
     setResearchLoading(true)
     setResearchError('')
     setResearchSources([])
@@ -486,6 +503,7 @@ function App() {
       const data = await postJSON<{
         sources: LegalSource[]
       }>('/api/legal-research', {
+        jurisdiction: caseData.jurisdiction,
         query: researchQuery
       })
 
@@ -500,6 +518,13 @@ function App() {
   }
 
   const findPrecedents = async () => {
+    if (!supportedJurisdiction || precedentLoading || researchLoading) return
+  
+    if (researchQuery.trim().length < 5) {
+      setResearchError('Enter at least 5 characters to search.')
+      return
+    }
+  
     setPrecedentLoading(true)
     setResearchError('')
     setPrecedentMatches([])
@@ -511,6 +536,7 @@ function App() {
         matches: PrecedentMatch[]
         totalIndexed: number
       }>('/api/precedents/search', {
+        jurisdiction: caseData.jurisdiction,
         query: researchQuery
       })
 
@@ -527,6 +553,18 @@ function App() {
   }
 
   const checkCitation = async (match: PrecedentMatch) => {
+    if (!supportedJurisdiction) {
+      setResearchError('Only California, USA is supported.')
+      return
+    }
+  
+    if (match.source === 'CourtListener') {
+      setResearchError(
+        'Live CourtListener opinions require independent source verification. Local citation checking is unavailable.'
+      )
+      return
+    }
+  
     const key = `${match.id}-${match.passageIndex}`
     setCheckingCitation(key)
     setResearchError('')
@@ -725,6 +763,11 @@ function App() {
               </div>
             </div>
 
+            {validationIssues.length > 0 && (
+              <div className="notice" role="alert"><AlertTriangle size={20} />
+                <span>{validationIssues.join(' ')}</span>
+              </div>
+            )}
             <div className="form-grid">
               <label>
                 Case Title
@@ -738,12 +781,13 @@ function App() {
 
               <label>
                 Jurisdiction
-                <input
+                <select
                   value={caseData.jurisdiction}
-                  onChange={e =>
-                    updateField('jurisdiction', e.target.value)
-                  }
-                />
+                  onChange={e => updateField('jurisdiction', e.target.value)}
+                >
+                  <option value="California, USA">California, USA (supported demo jurisdiction)</option>
+                </select>
+                <small>Other jurisdictions, including India, are not yet supported.</small>
               </label>
             </div>
 
@@ -794,6 +838,11 @@ function App() {
               <span className="tag">Muse AI</span>
             </div>
 
+            {validationIssues.length > 0 && (
+              <div className="notice" role="alert"><AlertTriangle size={20} />
+                <span>{validationIssues.join(' ')}</span>
+              </div>
+            )}
             <div className="agents">
               {[
                 [
@@ -882,7 +931,7 @@ function App() {
               <button
                 className="primary"
                 onClick={runMuseAnalysis}
-                disabled={loading || !canAnalyze}
+                disabled={loading || judicialLoading || !canAnalyze}
               >
                 {loading ? (
                   <LoaderCircle size={18} />
@@ -897,7 +946,7 @@ function App() {
               <button
                 className="primary"
                 onClick={runJudicialIntelligence}
-                disabled={judicialLoading || !canAnalyze}
+                disabled={judicialLoading || loading || !canAnalyze}
               >
                 {judicialLoading ? <LoaderCircle size={18} /> : <ShieldCheck size={18} />}
                 {judicialLoading ? 'Muse Intelligence Running...' : 'Run Judicial Intelligence'}
@@ -1017,11 +1066,12 @@ function App() {
               </div>
             </div>
 
+            {!supportedJurisdiction && <div className="notice" role="alert">Legal research is available only for California, USA.</div>}
             <div className="action-row">
               <button
                 className="primary"
                 onClick={runLegalResearch}
-                disabled={researchLoading}
+                disabled={researchLoading || precedentLoading || !supportedJurisdiction}
               >
                 <Search size={18} />
                 {researchLoading
@@ -1032,7 +1082,7 @@ function App() {
               <button
                 className="secondary"
                 onClick={findPrecedents}
-                disabled={precedentLoading}
+                disabled={precedentLoading || researchLoading || !supportedJurisdiction}
               >
                 <BookOpen size={18} />
                 {precedentLoading
